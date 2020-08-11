@@ -263,32 +263,40 @@ xtest = np.float32(xtest / 255.0)
 
 ytest = np.float32(ytest)
 
-batches = 40
+batches = 10
 batch = 0
 test = 0
-tests = 50
+tests = 10
 correct = 0.0
 epoch = 0
-epochs = 2
+epochs = 600
+progress_update = 100
+lossarray = np.zeros(batches*epochs)
+losslabels= np.arange(batches*epochs)
 sess = tf.Session()
 init = tf.global_variables_initializer()
 sess.run(init)
 with sess.as_default():
     for epoch in range(epochs):
-        np.random.shuffle(xtrain)
-        np.random.shuffle(ytrain)
+        #np.random.shuffle(xtrain)
+        #np.random.shuffle(ytrain)
         for batch in range(batches):
-            _, currentloss = sess.run([mytrain_op, tloss], feed_dict={X: xtrain[batches*batch_size:batches*batch_size + batch_size, :, :, :],
-                                      Y: ytrain[batches*batch_size:batches*batch_size + batch_size]})
+            _, currentloss = sess.run([mytrain_op, tloss], feed_dict={X: xtrain[batch*batch_size:batch*batch_size + batch_size, :, :, :],
+                                      Y: ytrain[batch*batch_size:batch*batch_size + batch_size]})
+            lossarray[batches*epoch+batch]=currentloss
+            if ((epoch*batches+batch+1) % progress_update) == 0:
+                print('{} % complete'.format((epoch*batches + batch + 1)/(epochs*batches)*100))
+                print(currentloss)
             batch += 1
         epoch += 1
 
     for test in range(tests):
-        testresults = tpred.eval(feed_dict={X: xtest[test*batch_size:test*batch_size + batch_size, :, :, :]})
-        matches = (np.argmax(testresults, axis=1) == ytest[test*batch_size:test*batch_size + batch_size])
-        print(testresults)
+        testresults = tpred.eval(feed_dict={X: xtrain[test*batch_size:test*batch_size + batch_size, :, :, :]})
+        matches = (np.argmax(testresults, axis=1) == ytrain[test*batch_size:test*batch_size + batch_size])
         print(np.argmax(testresults, axis=1))
-        print(ytest[test*batch_size:test*batch_size + batch_size])
+        print(ytrain[test*batch_size:test*batch_size + batch_size])
         correct += int(np.sum(matches))
         test += 1
-print(correct/(tests*batch_size*epochs))
+print(correct/(tests*batch_size))
+plt.plot(losslabels, lossarray)
+plt.show()
