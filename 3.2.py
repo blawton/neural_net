@@ -6,7 +6,7 @@ import pickle
 import tensorflow as tf
 import sys
 
-data_path = "/Users/Ben/data/CIFAR-10/"
+data_path = "/CIFAR-10/"
 
 def one_hot_encoded(class_numbers, num_classes=None):
     num_classes = np.max(class_numbers) + 1

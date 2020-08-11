@@ -4,7 +4,7 @@ import os
 import pickle
 import sys
 
-data_path = "/Users/Ben/data/CIFAR-10/"
+data_path = "/CIFAR-10/"
 
 def one_hot_encoded(class_numbers, num_classes=None):
     num_classes = np.max(class_numbers) + 1
@@ -87,7 +87,7 @@ xtrain, ytrain, _ = load_training_data()
 
 xtest, ytest, _ = load_test_data()
 
-np.save('/Users/Ben/data/CIFAR-10/xtrain', xtrain, allow_pickle=False)
-np.save('/Users/Ben/data/CIFAR-10/ytrain', ytrain, allow_pickle=False)
-np.save('/Users/Ben/data/CIFAR-10/xtest', xtest, allow_pickle=False)
-np.save('/Users/Ben/data/CIFAR-10/ytest', ytest, allow_pickle=False)
+np.save('/CIFAR-10/xtrain', xtrain, allow_pickle=False)
+np.save('/CIFAR-10/ytrain', ytrain, allow_pickle=False)
+np.save('/CIFAR-10/xtest', xtest, allow_pickle=False)
+np.save('/CIFAR-10/ytest', ytest, allow_pickle=False)

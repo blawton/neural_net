@@ -182,11 +182,11 @@ xtest = np.empty((10000, 32, 32, 3))
 
 ytest = np.empty(10000)
 
-xtrain = np.load('/Users/Ben/data/CIFAR-10/xtrain.npy', allow_pickle=False)
-ytrain = np.load('/Users/Ben/data/CIFAR-10/ytrain.npy', allow_pickle=False)
+xtrain = np.load('/CIFAR-10/xtrain.npy', allow_pickle=False)
+ytrain = np.load('/CIFAR-10/ytrain.npy', allow_pickle=False)
 
-xtest = np.load('/Users/Ben/data/CIFAR-10/xtest.npy', allow_pickle=False)
-ytest = np.load('/Users/Ben/data/CIFAR-10/ytest.npy', allow_pickle=False)
+xtest = np.load('/CIFAR-10/xtest.npy', allow_pickle=False)
+ytest = np.load('/CIFAR-10/ytest.npy', allow_pickle=False)
 
 xtrain = np.float32(xtrain / 255.0)
 

@@ -9,7 +9,7 @@ import time
 print(sys.version)
 
 #Important variables used to retrieve data and srtructure neural net
-data_path = "/Users/Ben/data/CIFAR-10/"
+data_path = "/CIFAR-10/"
 channels = 16
 
 def one_hot_encoded(class_numbers, num_classes=None):
