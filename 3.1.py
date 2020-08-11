@@ -7,7 +7,10 @@ import sys
 import time
 
 print(sys.version)
+
+#Important variables used to retrieve data and srtructure neural net
 data_path = "/Users/Ben/data/CIFAR-10/"
+channels = 16
 
 def one_hot_encoded(class_numbers, num_classes=None):
     num_classes = np.max(class_numbers) + 1
@@ -159,14 +162,14 @@ xtest, ytest, _ = load_test_data()
 
 xtrain = (xtrain-np.mean(xtrain))/255.0
 
-W0 = np.random.normal(0., .01, (16,3,3,3))
-b0 = np.random.normal(.05, .01, 16)
+W0 = np.random.normal(0., .01, (channels,3,3,3))
+b0 = np.random.normal(0, .01, channels)
 
 W1 = np.random.normal(0., .01, (3600,10))
-b1 = np.random.normal(.05, .01, 10)
+b1 = np.random.normal(0, .01, 10)
 
-channels = 16
 
+#A pooling layer that takes the maximum of (2,2) squares in the input image to reduce dimensionality
 def pool(input):
     cache=np.empty((2, channels, 15, 15), dtype=np.int)
     output=np.empty((channels, 15, 15), dtype=np.int)
@@ -179,39 +182,58 @@ def pool(input):
                 output[chan, x1, x2] = input[chan,(2*x1)+cache[0, chan, x1, x2], (2*x2)+cache[1, chan, x1, x2]]
     return output, cache
 
+#Test pooling with random data
+pool_tester = np.random.randint(8, high=None, size=(channels, 30, 30))
+print(pool_tester)
+poold=pool(pool_tester)
+print(poold[0])
+print(poold[1])
+
+#Defines convolution of input with each filter in a (channel,3,3,3)-shaped array
 def filter(filters, b, input):
-    output = np.empty((16, 30, 30))
-    for chan in range(16):
+    output = np.empty((channels, 30, 30))
+    for chan in range(channels):
         for x1 in range(30):
             for x2 in range(30):
                 output[chan,x1,x2] = np.sum(input[x1:x1+3, x2:x2+3,:]*filters[chan,:,:,:]) + b[chan]
     return(output)
-pool_tester = np.random.randint(8, high=None, size=(16, 30, 30))
+
+#Test the convolution leayer with W0 as the weights, b0 as constants,
+#and the first piece of training data as input
 filter_tester = xtrain[0]
-#print(filter(W0, filter_tester))
+print(filter(W0, b0, filter_tester))
 
+
+#rectified linear function used to introduce a nonlinearity to neural net
 def relu_forward(input):
-    #print(W0[1,:,:,:])
-    return(np.maximum(input, 0))
+    #print(input)
+    cache = np.array([x>0. for x in input])
+    output = np.multiply(cache, input)
+    #print(output)
+    return(output, cache)
 
+#Backwards propogation of the rectifier (ReLU) gradient
+def relu_backward(dout, cache):
+    din = np.multiply(dout, cache)
+    return(din)
+
+#Tests backwards prop. of rectifier gradient
 relu_test= np.array([-3,1,-.2,0,1,4,1,-.05,-6,5])
 dout_test = ([2,2,2,2,2,4,4,4,4,4])
-def relu_backward(dout, cache):
-    inputs = cache
-    B = np.array([x>0. for x in inputs])
-    #print(B)
-    din = np.multiply(B.astype(int), dout)
-    return(din)
+print(relu_backward(dout_test, relu_test))
+
+#Backward prop. of gradient from first layer (convolution w/ filters)
 def W0_backward(dout, inputs):
-    dweight=np.zeros((16,3,3,3))
-    db0=np.zeros(16)
-    for k in range(16):
+    dweight=np.zeros((channels,3,3,3))
+    db0=np.zeros(channels)
+    for k in range(channels):
         for p1 in range(30):
             for p2 in range(30):
                 dweight[k,:,:,:] += (inputs[p1:p1+3,p2:p2+3,:]*dout[k, p1, p2])
                 db0[k] += dout[k, p1, p2]
     return(dweight, db0)
 
+#Backwards prop. of the gradient from the pool layer
 def pool_backward(dout, inputs, cache):
     din = np.zeros(inputs.shape)
     for chan in range(0, inputs.shape[0]):
@@ -221,62 +243,55 @@ def pool_backward(dout, inputs, cache):
                 #print(2*x1 + (mindex/2))
                 #print(2*x2 + (mindex%2))
     return(din)
-batches = 500
+
+#test pool_backward with the test data from before, using the cache from poold
+print(pool_backward(np.ones((channels,15,15)), pool_tester, poold[1]))
+
+#Specification of training+testing parameters incl. batches, step size, batch size, tests
+batches = 1000
 batch_size = 1
 correct = 0.0
 eta = .001
-tests = 50
+tests = 300
+
+#Train the neural net using the parameters specified above
 startt = time.time()
 for i1 in range(batches):
-    sumdW0 = 0.0
-    sumdb0 = 0.0
-    sumdW1 = 0.0
-    sumdb1 = 0.0
-    for i2 in range(batch_size):
-        filtered = filter(W0, b0, xtrain[batch_size*i1 + i2, :, :, :])
-        relud= relu_forward(filtered)
-        pooled, cachep = pool(relud)
-        probs, loss, dinsoft = softmax(fc_forward(pooled, W1, b1)[0], ylabels[batch_size*i1 + i2])
-        dinfc, dW1, db1 = fc_backward(dinsoft, (pooled, W1, b1))
-        #for i in range(16):
-            #print(relu_backward(pool_backward(dinfc, relu_forward(filtered)), filtered)[i,:,:])
-        dW0, db0 = W0_backward(relu_backward(pool_backward(dinfc, relud, cachep), filtered) , xtrain[batch_size*i1 + i2, :, :, :])
-        #print(dW0)
-        #print(dW1)
-        #print(db1)
-        sumdW0 += dW0
-        sumdb0 += db0
-        sumdW1 += dW1
-        sumdb1 += db1
-    dW0tot = sumdW0/batch_size
-    db0tot = sumdb0/batch_size
-    dW1tot = sumdW1/batch_size
-    db1tot = sumdb1/batch_size
+    filtered = filter(W0, b0, xtrain[i1, :, :, :])
+    relud, cacher = relu_forward(filtered)
+    pooled, cachep = pool(relud)
+    probs, loss, dinsoft = softmax(fc_forward(pooled, W1, b1)[0], ylabels[i1])
+    dinfc, dW1, db1 = fc_backward(dinsoft, (pooled, W1, b1))
+    #for i in range(channels):
+    #print(relu_backward(pool_backward(dinfc, relu_forward(filtered)), filtered)[i,:,:])
+    dW0, db0 = W0_backward(relu_backward(pool_backward(dinfc, relud, cachep), filtered) , xtrain[i1, :, :, :])
+    #print(dW0)
+    #print(dW1)
+    #print(db1)
     #print(dW0tot)
     #print(dW1tot)
     #print(db1tot)
-    W0 -= (eta*dW0tot)
-    b0 -= (eta*db0tot)
-    W1 -= (eta*dW1tot)
-    b1 -= (eta*db1tot)
+    W0 -= (eta*dW0)
+    b0 -= (eta*db0)
+    W1 -= (eta*dW1)
+    b1 -= (eta*db1)
 endt = time.time()
-start = np.random.randint(5001-tests)
-for i3 in range(start, start+tests):
-    filtered = filter(W0, b0, xtest[i3, :, :, :])
-    relud = relu_forward(filtered)
+
+#Random choice of cifar data to test neural net
+testers = np.random.choice(5000, tests, replace=False)
+
+#Run the test of the neural net trained above
+for i3 in range(tests):
+    filtered = filter(W0, b0, xtest[testers[i3], :, :, :])
+    relud = relu_forward(filtered)[0]
     pooled = pool(relud)[0]
-    probs, loss, dinsoft = softmax(fc_forward(pooled, W1, b1)[0], ytest[i3])
+    probs, loss, dinsoft = softmax(fc_forward(pooled, W1, b1)[0], ytest[testers[i3]])
     #print(np.argmax(probs))
     #print("should be =" + str(ytest[i3]))
-    if np.argmax(probs) == ytest[i3]:
+    if np.argmax(probs) == ytest[testers[i3]]:
         correct += 1.
         #print(correct)
 
+#Print train timing and accuracy information
 print(correct/tests)
 print(endt-startt)
-#print(relu_backward(dout_test, relu_test))
-#print(pool_tester)
-#poold=pool(pool_tester)
-#print(poold[0])
-#print(poold[1])
-#print(pool_backward(np.ones((16,15,15)), pool_tester, poold[1]))
