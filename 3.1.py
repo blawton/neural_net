@@ -150,34 +150,43 @@ xtrain = np.empty((50000, 32, 32, 3))
 
 ytrain = np.empty((50000, 10))
 
+ylabels = np.empty(50000)
 #load_class_names()
 
-xtrain,_,ytrain = load_training_data()
+xtrain, ylabels ,ytrain = load_training_data()
+#ylabels = np.ones(50000, dtype=int)*7
+xtest, ytest, _ = load_test_data()
+
+xtrain = (xtrain-np.mean(xtrain))/255.0
 
 W0 = np.random.normal(0., .01, (16,3,3,3))
-#b0 = np.zeros(16)
+b0 = np.random.normal(.05, .01, 16)
 
 W1 = np.random.normal(0., .01, (3600,10))
-b1 = np.random.normal(0., .01, 10)
+b1 = np.random.normal(.05, .01, 10)
 
 channels = 16
+
 def pool(input):
-    cache=np.empty((channels, 30, 30))
-    output=np.empty((channels, 15, 15))
+    cache=np.empty((2, channels, 15, 15), dtype=np.int)
+    output=np.empty((channels, 15, 15), dtype=np.int)
     for chan in range(0, channels):
         for x2 in range(0, 15):
             for x1 in range(0, 15):
-                output[chan, x1, x2] = np.amax(input[chan, (2*x1):(2*x1 + 2), (2*x2):(2*x2 + 2)])
-    return output
+                mindex = np.argmax(input[chan, (2*x1):(2*x1 + 2), (2*x2):(2*x2 + 2)])
+                cache[0, chan, x1, x2] = mindex // 2
+                cache[1, chan, x1, x2] = mindex % 2
+                output[chan, x1, x2] = input[chan,(2*x1)+cache[0, chan, x1, x2], (2*x2)+cache[1, chan, x1, x2]]
+    return output, cache
 
-def filter(filters, input):
+def filter(filters, b, input):
     output = np.empty((16, 30, 30))
     for chan in range(16):
         for x1 in range(30):
             for x2 in range(30):
-                output[chan,x1,x2] = np.sum(input[x1:x1+3, x2:x2+3,:]*filters[chan,:,:,:])
+                output[chan,x1,x2] = np.sum(input[x1:x1+3, x2:x2+3,:]*filters[chan,:,:,:]) + b[chan]
     return(output)
-pool_tester = xtrain[1, 0:30, 0:30]
+pool_tester = np.random.randint(8, high=None, size=(16, 30, 30))
 filter_tester = xtrain[0]
 #print(filter(W0, filter_tester))
 
@@ -195,19 +204,20 @@ def relu_backward(dout, cache):
     return(din)
 def W0_backward(dout, inputs):
     dweight=np.zeros((16,3,3,3))
+    db0=np.zeros(16)
     for k in range(16):
         for p1 in range(30):
             for p2 in range(30):
                 dweight[k,:,:,:] += (inputs[p1:p1+3,p2:p2+3,:]*dout[k, p1, p2])
-    return(dweight)
+                db0[k] += dout[k, p1, p2]
+    return(dweight, db0)
 
-def pool_backward(dout, inputs):
+def pool_backward(dout, inputs, cache):
     din = np.zeros(inputs.shape)
     for chan in range(0, inputs.shape[0]):
         for x2 in range(0,int(inputs.shape[1]/2)):
             for x1 in range(0,int(inputs.shape[2]/2)):
-                mindex = np.argmax(inputs[chan, (2*x1):(2*x1 + 2),(2*x2):(2*x2 + 2)])
-                din[chan, 2*x1 + int(mindex/2),2*x2 + (mindex%2)]=dout[chan, x1, x2]
+                din[chan, (2*x1)+cache[0, chan, x1, x2],(2*x2)+cache[1, chan, x1, x2]]=dout[chan, x1, x2]
                 #print(2*x1 + (mindex/2))
                 #print(2*x2 + (mindex%2))
     return(din)
@@ -215,40 +225,58 @@ batches = 500
 batch_size = 1
 correct = 0.0
 eta = .001
-startt= time.time()
+tests = 50
+startt = time.time()
 for i1 in range(batches):
     sumdW0 = 0.0
+    sumdb0 = 0.0
     sumdW1 = 0.0
     sumdb1 = 0.0
     for i2 in range(batch_size):
-        filtered = filter(W0, xtrain[batch_size*i1 + i2, :, :, :])
-        pooled = pool(relu_forward(filtered))
-        probs, loss, dinsoft = softmax(fc_forward(pooled, W1, b1)[0], np.argmax(ytrain[batch_size*i1 + i2,:]))
+        filtered = filter(W0, b0, xtrain[batch_size*i1 + i2, :, :, :])
+        relud= relu_forward(filtered)
+        pooled, cachep = pool(relud)
+        probs, loss, dinsoft = softmax(fc_forward(pooled, W1, b1)[0], ylabels[batch_size*i1 + i2])
         dinfc, dW1, db1 = fc_backward(dinsoft, (pooled, W1, b1))
         #for i in range(16):
             #print(relu_backward(pool_backward(dinfc, relu_forward(filtered)), filtered)[i,:,:])
-        dW0 = W0_backward(relu_backward(pool_backward(dinfc, relu_forward(filtered)), filtered) , xtrain[batch_size*i1 + i2, :, :, :])
+        dW0, db0 = W0_backward(relu_backward(pool_backward(dinfc, relud, cachep), filtered) , xtrain[batch_size*i1 + i2, :, :, :])
         #print(dW0)
         #print(dW1)
         #print(db1)
-        if np.argmax(probs)==np.argmax(ytrain[batch_size*i1 + i2,:]):
-            correct += 1.
         sumdW0 += dW0
+        sumdb0 += db0
         sumdW1 += dW1
         sumdb1 += db1
     dW0tot = sumdW0/batch_size
+    db0tot = sumdb0/batch_size
     dW1tot = sumdW1/batch_size
     db1tot = sumdb1/batch_size
     #print(dW0tot)
     #print(dW1tot)
     #print(db1tot)
     W0 -= (eta*dW0tot)
+    b0 -= (eta*db0tot)
     W1 -= (eta*dW1tot)
     b1 -= (eta*db1tot)
-endt=time.time()
+endt = time.time()
+start = np.random.randint(5001-tests)
+for i3 in range(start, start+tests):
+    filtered = filter(W0, b0, xtest[i3, :, :, :])
+    relud = relu_forward(filtered)
+    pooled = pool(relud)[0]
+    probs, loss, dinsoft = softmax(fc_forward(pooled, W1, b1)[0], ytest[i3])
+    #print(np.argmax(probs))
+    #print("should be =" + str(ytest[i3]))
+    if np.argmax(probs) == ytest[i3]:
+        correct += 1.
+        #print(correct)
 
+print(correct/tests)
 print(endt-startt)
-print(correct/float(batch_size*batches))
 #print(relu_backward(dout_test, relu_test))
-#print(pool_tester_b)
-#print(pool_backward(np.ones((1,8,8)), pool_tester_b))
+#print(pool_tester)
+#poold=pool(pool_tester)
+#print(poold[0])
+#print(poold[1])
+#print(pool_backward(np.ones((16,15,15)), pool_tester, poold[1]))
